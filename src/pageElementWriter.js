@@ -1,6 +1,6 @@
-'use strict';
+"use strict";
 
-var ElementWriter = require('./elementWriter');
+var ElementWriter = require("./elementWriter");
 
 /**
  * Creates an instance of PageElementWriter - an extended ElementWriter
@@ -18,34 +18,55 @@ function PageElementWriter(context, tracker) {
 	this.writer = new ElementWriter(context, tracker);
 }
 
-function fitOnPage(self, addFct) {
-	var position = addFct(self);
-	if (!position) {
-		self.moveToNextPage();
+async function fitOnPage(self, addFct) {
+	var position = undefined;
+
+	if (addFct instanceof Promise || addFct.constructor.name == "AsyncFunction") {
+		position = await addFct(self);
+	} else {
 		position = addFct(self);
+	}
+
+	if (!position) {
+		await self.moveToNextPage();
+
+		if (addFct instanceof Promise || addFct.constructor.name == "AsyncFunction") {
+			position = await addFct(self);
+		} else {
+			position = addFct(self);
+		}
 	}
 	return position;
 }
 
-PageElementWriter.prototype.addLine = function (line, dontUpdateContextPosition, index) {
-	return fitOnPage(this, function (self) {
-		return self.writer.addLine(line, dontUpdateContextPosition, index);
+PageElementWriter.prototype.addLine = async function (
+	line,
+	dontUpdateContextPosition,
+	index
+) {
+	return await fitOnPage(this, async function (self) {
+		return await self.writer.addLine(line, dontUpdateContextPosition, index);
 	});
 };
 
-PageElementWriter.prototype.addImage = function (image, index) {
-	return fitOnPage(this, function (self) {
+PageElementWriter.prototype.addImage = async function (image, index) {
+	return await fitOnPage(this, function (self) {
 		return self.writer.addImage(image, index);
 	});
 };
 
-PageElementWriter.prototype.addQr = function (qr, index) {
-	return fitOnPage(this, function (self) {
+PageElementWriter.prototype.addQr = async function (qr, index) {
+	return await fitOnPage(this, function (self) {
 		return self.writer.addQr(qr, index);
 	});
 };
 
-PageElementWriter.prototype.addVector = function (vector, ignoreContextX, ignoreContextY, index) {
+PageElementWriter.prototype.addVector = function (
+	vector,
+	ignoreContextX,
+	ignoreContextY,
+	index
+) {
 	return this.writer.addVector(vector, ignoreContextX, ignoreContextY, index);
 };
 
@@ -61,16 +82,32 @@ PageElementWriter.prototype.alignCanvas = function (node) {
 	this.writer.alignCanvas(node);
 };
 
-PageElementWriter.prototype.addFragment = function (fragment, useBlockXOffset, useBlockYOffset, dontUpdateContextPosition) {
-	if (!this.writer.addFragment(fragment, useBlockXOffset, useBlockYOffset, dontUpdateContextPosition)) {
-		this.moveToNextPage();
-		this.writer.addFragment(fragment, useBlockXOffset, useBlockYOffset, dontUpdateContextPosition);
+PageElementWriter.prototype.addFragment = async function (
+	fragment,
+	useBlockXOffset,
+	useBlockYOffset,
+	dontUpdateContextPosition
+) {
+	if (
+		!this.writer.addFragment(
+			fragment,
+			useBlockXOffset,
+			useBlockYOffset,
+			dontUpdateContextPosition
+		)
+	) {
+		await this.moveToNextPage();
+		this.writer.addFragment(
+			fragment,
+			useBlockXOffset,
+			useBlockYOffset,
+			dontUpdateContextPosition
+		);
 	}
 };
 
-PageElementWriter.prototype.moveToNextPage = function (pageOrientation) {
-
-	var nextPage = this.writer.context.moveToNextPage(pageOrientation);
+PageElementWriter.prototype.moveToNextPage = async function (pageOrientation) {
+	var nextPage = await this.writer.context.moveToNextPage(pageOrientation);
 
 	if (nextPage.newPageCreated) {
 		this.repeatables.forEach(function (rep) {
@@ -82,7 +119,7 @@ PageElementWriter.prototype.moveToNextPage = function (pageOrientation) {
 		}, this);
 	}
 
-	this.writer.tracker.emit('pageChanged', {
+	await this.writer.tracker.emit("pageChanged", {
 		prevPage: nextPage.prevPage,
 		prevY: nextPage.prevY,
 		y: nextPage.y
@@ -96,7 +133,10 @@ PageElementWriter.prototype.beginUnbreakableBlock = function (width, height) {
 	}
 };
 
-PageElementWriter.prototype.commitUnbreakableBlock = function (forcedX, forcedY) {
+PageElementWriter.prototype.commitUnbreakableBlock = async function (
+	forcedX,
+	forcedY
+) {
 	if (--this.transactionLevel === 0) {
 		var unbreakableContext = this.writer.context;
 		this.writer.popContext();
@@ -112,9 +152,15 @@ PageElementWriter.prototype.commitUnbreakableBlock = function (forcedX, forcedY)
 			if (nbPages > 1) {
 				// on out-of-context blocs (headers, footers, background) height should be the whole DocumentContext height
 				if (forcedX !== undefined || forcedY !== undefined) {
-					fragment.height = unbreakableContext.getCurrentPage().pageSize.height - unbreakableContext.pageMargins.top - unbreakableContext.pageMargins.bottom;
+					fragment.height =
+						unbreakableContext.getCurrentPage().pageSize.height -
+						unbreakableContext.pageMargins.top -
+						unbreakableContext.pageMargins.bottom;
 				} else {
-					fragment.height = this.writer.context.getCurrentPage().pageSize.height - this.writer.context.pageMargins.top - this.writer.context.pageMargins.bottom;
+					fragment.height =
+						this.writer.context.getCurrentPage().pageSize.height -
+						this.writer.context.pageMargins.top -
+						this.writer.context.pageMargins.bottom;
 					for (var i = 0, l = this.repeatables.length; i < l; i++) {
 						fragment.height -= this.repeatables[i].height;
 					}
@@ -126,7 +172,7 @@ PageElementWriter.prototype.commitUnbreakableBlock = function (forcedX, forcedY)
 			if (forcedX !== undefined || forcedY !== undefined) {
 				this.writer.addFragment(fragment, true, true, true);
 			} else {
-				this.addFragment(fragment);
+				await this.addFragment(fragment);
 			}
 		}
 	}
@@ -134,7 +180,7 @@ PageElementWriter.prototype.commitUnbreakableBlock = function (forcedX, forcedY)
 
 PageElementWriter.prototype.currentBlockToRepeatable = function () {
 	var unbreakableContext = this.writer.context;
-	var rep = {items: []};
+	var rep = { items: [] };
 
 	unbreakableContext.pages[0].items.forEach(function (item) {
 		rep.items.push(item);

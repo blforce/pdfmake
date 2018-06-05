@@ -98,11 +98,6 @@ DocPreprocessor.prototype.preprocessList = async function(node) {
 DocPreprocessor.prototype.preprocessTable = async function(node) {
 	var col, row, cols, rows;
 
-	// Fill table with data to start
-	if (node.data) {
-		await this.fillTableData(node);
-	}
-
 	for (col = 0, cols = node.table.body[0].length; col < cols; col++) {
 		for (row = 0, rows = node.table.body.length; row < rows; row++) {
 			var rowData = node.table.body[row];

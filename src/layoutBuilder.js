@@ -16,9 +16,12 @@ var fontStringify = require("./helpers").fontStringify;
 var isFunction = require("./helpers").isFunction;
 var TextTools = require("./textTools");
 var StyleContextStack = require("./styleContextStack");
+var util = require("util");
+var mysql = require("mysql");
+var stream = require("stream");
 
 function addAll(target, otherArray) {
-	otherArray.forEach(function(item) {
+	otherArray.forEach(function (item) {
 		target.push(item);
 	});
 }
@@ -35,10 +38,10 @@ function LayoutBuilder(pageSize, pageMargins, imageMeasure) {
 	this.pageMargins = pageMargins;
 	this.tracker = new TraversalTracker();
 	this.imageMeasure = imageMeasure;
-	this.tableLayouts = {};
+	this.Layouts = {};
 }
 
-LayoutBuilder.prototype.registerTableLayouts = function(tableLayouts) {
+LayoutBuilder.prototype.registerTableLayouts = function (tableLayouts) {
 	this.tableLayouts = pack(this.tableLayouts, tableLayouts);
 };
 
@@ -52,7 +55,7 @@ LayoutBuilder.prototype.registerTableLayouts = function(tableLayouts) {
  * @param {Object} defaultStyle default style definition
  * @return {Array} an array of pages
  */
-LayoutBuilder.prototype.layoutDocument = async function(
+LayoutBuilder.prototype.layoutDocument = async function (
 	docStructure,
 	fontProvider,
 	styleDictionary,
@@ -69,11 +72,11 @@ LayoutBuilder.prototype.layoutDocument = async function(
 			return false;
 		}
 
-		linearNodeList = linearNodeList.filter(function(node) {
+		linearNodeList = linearNodeList.filter(function (node) {
 			return node.positions.length > 0;
 		});
 
-		linearNodeList.forEach(function(node) {
+		linearNodeList.forEach(function (node) {
 			var nodeInfo = {};
 			[
 				"id",
@@ -91,17 +94,17 @@ LayoutBuilder.prototype.layoutDocument = async function(
 				"pageOrientation",
 				"width",
 				"height"
-			].forEach(function(key) {
+			].forEach(function (key) {
 				if (node[key] !== undefined) {
 					nodeInfo[key] = node[key];
 				}
 			});
 			nodeInfo.startPosition = node.positions[0];
 			nodeInfo.pageNumbers = node.positions
-				.map(function(node) {
+				.map(function (node) {
 					return node.pageNumber;
 				})
-				.filter(function(element, position, array) {
+				.filter(function (element, position, array) {
 					return array.indexOf(element) === position;
 				});
 			nodeInfo.pages = pages.length;
@@ -110,39 +113,39 @@ LayoutBuilder.prototype.layoutDocument = async function(
 			node.nodeInfo = nodeInfo;
 		});
 
-		return linearNodeList.some(function(node, index, followingNodeList) {
+		return linearNodeList.some(function (node, index, followingNodeList) {
 			if (node.pageBreak !== "before" && !node.pageBreakCalculated) {
 				node.pageBreakCalculated = true;
 				var pageNumber = node.nodeInfo.pageNumbers[0];
 
 				var followingNodesOnPage = followingNodeList
 					.slice(index + 1)
-					.filter(function(node0) {
+					.filter(function (node0) {
 						return node0.nodeInfo.pageNumbers.indexOf(pageNumber) > -1;
 					});
 
 				var nodesOnNextPage = followingNodeList
 					.slice(index + 1)
-					.filter(function(node0) {
+					.filter(function (node0) {
 						return node0.nodeInfo.pageNumbers.indexOf(pageNumber + 1) > -1;
 					});
 
 				var previousNodesOnPage = followingNodeList
 					.slice(0, index)
-					.filter(function(node0) {
+					.filter(function (node0) {
 						return node0.nodeInfo.pageNumbers.indexOf(pageNumber) > -1;
 					});
 
 				if (
 					pageBreakBeforeFct(
 						node.nodeInfo,
-						followingNodesOnPage.map(function(node) {
+						followingNodesOnPage.map(function (node) {
 							return node.nodeInfo;
 						}),
-						nodesOnNextPage.map(function(node) {
+						nodesOnNextPage.map(function (node) {
 							return node.nodeInfo;
 						}),
-						previousNodesOnPage.map(function(node) {
+						previousNodesOnPage.map(function (node) {
 							return node.nodeInfo;
 						})
 					)
@@ -165,7 +168,7 @@ LayoutBuilder.prototype.layoutDocument = async function(
 	);
 
 	function resetXYs(result) {
-		result.linearNodeList.forEach(function(node) {
+		result.linearNodeList.forEach(function (node) {
 			node.resetXY();
 		});
 	}
@@ -199,7 +202,7 @@ LayoutBuilder.prototype.layoutDocument = async function(
 	return result.pages;
 };
 
-LayoutBuilder.prototype.tryLayoutDocument = async function(
+LayoutBuilder.prototype.tryLayoutDocument = async function (
 	docStructure,
 	fontProvider,
 	styleDictionary,
@@ -221,15 +224,15 @@ LayoutBuilder.prototype.tryLayoutDocument = async function(
 	);
 
 	var _this = this;
-	this.writer.context().tracker.startTracking("pageAdded", function() {
-		_this.addBackground(background);
+	this.writer.context().tracker.startTracking("pageAdded", async function () {
+		await _this.addBackground(background);
 	});
 
-	this.addBackground(background);
-	this.processNode(docStructure);
-	this.addHeadersAndFooters(header, footer);
+	await this.addBackground(background);
+	await this.processNode(docStructure);
+	await this.addHeadersAndFooters(header, footer);
 	if (watermark != null) {
-		this.addWatermark(watermark, fontProvider, defaultStyle);
+		await this.addWatermark(watermark, fontProvider, defaultStyle);
 	}
 
 	return {
@@ -238,12 +241,12 @@ LayoutBuilder.prototype.tryLayoutDocument = async function(
 	};
 };
 
-LayoutBuilder.prototype.addBackground = function(background) {
+LayoutBuilder.prototype.addBackground = async function (background) {
 	var backgroundGetter = isFunction(background)
 		? background
-		: function() {
-				return background;
-		  };
+		: function () {
+			return background;
+		};
 
 	var context = this.writer.context();
 	var pageSize = context.getCurrentPage().pageSize;
@@ -253,22 +256,22 @@ LayoutBuilder.prototype.addBackground = function(background) {
 	if (pageBackground) {
 		this.writer.beginUnbreakableBlock(pageSize.width, pageSize.height);
 		pageBackground = this.docPreprocessor.preprocessDocument(pageBackground);
-		this.processNode(this.docMeasure.measureDocument(pageBackground));
-		this.writer.commitUnbreakableBlock(0, 0);
+		await this.processNode(this.docMeasure.measureDocument(pageBackground));
+		await this.writer.commitUnbreakableBlock(0, 0);
 		context.hasBackground = true;
 	}
 };
 
-LayoutBuilder.prototype.addStaticRepeatable = function(
+LayoutBuilder.prototype.addStaticRepeatable = async function (
 	headerOrFooter,
 	sizeFunction
 ) {
-	this.addDynamicRepeatable(function() {
+	await this.addDynamicRepeatable(function () {
 		return JSON.parse(JSON.stringify(headerOrFooter)); // copy to new object
 	}, sizeFunction);
 };
 
-LayoutBuilder.prototype.addDynamicRepeatable = function(
+LayoutBuilder.prototype.addDynamicRepeatable = async function (
 	nodeGetter,
 	sizeFunction
 ) {
@@ -290,14 +293,14 @@ LayoutBuilder.prototype.addDynamicRepeatable = function(
 			);
 			this.writer.beginUnbreakableBlock(sizes.width, sizes.height);
 			node = this.docPreprocessor.preprocessDocument(node);
-			this.processNode(this.docMeasure.measureDocument(node));
-			this.writer.commitUnbreakableBlock(sizes.x, sizes.y);
+			await this.processNode(this.docMeasure.measureDocument(node));
+			await this.writer.commitUnbreakableBlock(sizes.x, sizes.y);
 		}
 	}
 };
 
-LayoutBuilder.prototype.addHeadersAndFooters = function(header, footer) {
-	var headerSizeFct = function(pageSize, pageMargins) {
+LayoutBuilder.prototype.addHeadersAndFooters = function (header, footer) {
+	var headerSizeFct = function (pageSize, pageMargins) {
 		return {
 			x: 0,
 			y: 0,
@@ -306,7 +309,7 @@ LayoutBuilder.prototype.addHeadersAndFooters = function(header, footer) {
 		};
 	};
 
-	var footerSizeFct = function(pageSize, pageMargins) {
+	var footerSizeFct = function (pageSize, pageMargins) {
 		return {
 			x: 0,
 			y: pageSize.height - pageMargins.bottom,
@@ -328,7 +331,7 @@ LayoutBuilder.prototype.addHeadersAndFooters = function(header, footer) {
 	}
 };
 
-LayoutBuilder.prototype.addWatermark = function(
+LayoutBuilder.prototype.addWatermark = function (
 	watermark,
 	fontProvider,
 	defaultStyle
@@ -414,14 +417,14 @@ function decorateNode(node) {
 	node.positions = [];
 
 	if (isArray(node.canvas)) {
-		node.canvas.forEach(function(vector) {
+		node.canvas.forEach(function (vector) {
 			var x = vector.x,
 				y = vector.y,
 				x1 = vector.x1,
 				y1 = vector.y1,
 				x2 = vector.x2,
 				y2 = vector.y2;
-			vector.resetXY = function() {
+			vector.resetXY = function () {
 				vector.x = x;
 				vector.y = y;
 				vector.x1 = x1;
@@ -432,24 +435,24 @@ function decorateNode(node) {
 		});
 	}
 
-	node.resetXY = function() {
+	node.resetXY = function () {
 		node.x = x;
 		node.y = y;
 		if (isArray(node.canvas)) {
-			node.canvas.forEach(function(vector) {
+			node.canvas.forEach(function (vector) {
 				vector.resetXY();
 			});
 		}
 	};
 }
 
-LayoutBuilder.prototype.processNode = function(node) {
+LayoutBuilder.prototype.processNode = async function (node) {
 	var self = this;
 
 	this.linearNodeList.push(node);
 	decorateNode(node);
 
-	applyMargins(function() {
+	await applyMargins(async function () {
 		var unbreakable = node.unbreakable;
 		if (unbreakable) {
 			self.writer.beginUnbreakableBlock();
@@ -473,28 +476,28 @@ LayoutBuilder.prototype.processNode = function(node) {
 		}
 
 		if (node.stack) {
-			self.processVerticalContainer(node);
+			await self.processVerticalContainer(node);
 		} else if (node.columns) {
-			self.processColumns(node);
+			await self.processColumns(node);
 		} else if (node.ul) {
-			self.processList(false, node);
+			await self.processList(false, node);
 		} else if (node.ol) {
-			self.processList(true, node);
+			await self.processList(true, node);
 		} else if (node.table) {
-			self.processTable(node);
+			await self.processTable(node);
 		} else if (node.text !== undefined) {
-			self.processLeaf(node);
+			await self.processLeaf(node);
 		} else if (node.toc) {
-			self.processToc(node);
+			await self.processToc(node);
 		} else if (node.image) {
-			self.processImage(node);
+			await self.processImage(node);
 		} else if (node.canvas) {
-			self.processCanvas(node);
+			await self.processCanvas(node);
 		} else if (node.qr) {
-			self.processQr(node);
+			await self.processQr(node);
 		} else if (!node._span) {
 			throw "Unrecognized document structure: " +
-				JSON.stringify(node, fontStringify);
+			JSON.stringify(node, fontStringify);
 		}
 
 		if (absPosition || relPosition) {
@@ -502,15 +505,15 @@ LayoutBuilder.prototype.processNode = function(node) {
 		}
 
 		if (unbreakable) {
-			self.writer.commitUnbreakableBlock();
+			await self.writer.commitUnbreakableBlock();
 		}
 	});
 
-	function applyMargins(callback) {
+	async function applyMargins(callback) {
 		var margin = node._margin;
 
 		if (node.pageBreak === "before") {
-			self.writer.moveToNextPage(node.pageOrientation);
+			await self.writer.moveToNextPage(node.pageOrientation);
 		}
 
 		if (margin) {
@@ -518,7 +521,7 @@ LayoutBuilder.prototype.processNode = function(node) {
 			self.writer.context().addMargin(margin[0], margin[2]);
 		}
 
-		callback();
+		await callback();
 
 		if (margin) {
 			self.writer.context().addMargin(-margin[0], -margin[2]);
@@ -526,24 +529,21 @@ LayoutBuilder.prototype.processNode = function(node) {
 		}
 
 		if (node.pageBreak === "after") {
-			self.writer.moveToNextPage(node.pageOrientation);
+			await self.writer.moveToNextPage(node.pageOrientation);
 		}
 	}
 };
 
 // vertical container
-LayoutBuilder.prototype.processVerticalContainer = function(node) {
-	var self = this;
-	node.stack.forEach(function(item) {
-		self.processNode(item);
+LayoutBuilder.prototype.processVerticalContainer = async function (node) {
+	for (let item of node.stack) {
+		await this.processNode(item);
 		addAll(node.positions, item.positions);
-
-		//TODO: paragraph gap
-	});
+	}
 };
 
 // columns
-LayoutBuilder.prototype.processColumns = function(columnNode) {
+LayoutBuilder.prototype.processColumns = async function (columnNode) {
 	var columns = columnNode.columns;
 	var availableWidth = this.writer.context().availableWidth;
 	var gaps = gapArray(columnNode._gap);
@@ -553,7 +553,7 @@ LayoutBuilder.prototype.processColumns = function(columnNode) {
 	}
 
 	ColumnCalculator.buildColumnWidths(columns, availableWidth);
-	var result = this.processRow(columns, columns, gaps);
+	var result = await this.processRow(columns, columns, gaps);
 	addAll(columnNode.positions, result.positions);
 
 	function gapArray(gap) {
@@ -572,7 +572,7 @@ LayoutBuilder.prototype.processColumns = function(columnNode) {
 	}
 };
 
-LayoutBuilder.prototype.processRow = function(
+LayoutBuilder.prototype.processRow = async function (
 	columns,
 	widths,
 	gaps,
@@ -584,7 +584,7 @@ LayoutBuilder.prototype.processRow = function(
 	var pageBreaks = [],
 		positions = [];
 
-	this.tracker.auto("pageChanged", storePageBreakData, function() {
+	await this.tracker.auto("pageChanged", storePageBreakData, async function () {
 		widths = widths || columns;
 
 		self.writer.context().beginColumnGroup();
@@ -604,7 +604,7 @@ LayoutBuilder.prototype.processRow = function(
 				.context()
 				.beginColumn(width, leftOffset, getEndingCell(column, i));
 			if (!column._span) {
-				self.processNode(column);
+				await self.processNode(column);
 				addAll(positions, column.positions);
 			} else if (column._columnEndingContext) {
 				// row-span ending
@@ -617,7 +617,7 @@ LayoutBuilder.prototype.processRow = function(
 
 	return { pageBreaks: pageBreaks, positions: positions };
 
-	function storePageBreakData(data) {
+	async function storePageBreakData(data) {
 		var pageDesc;
 
 		for (var i = 0, l = pageBreaks.length; i < l; i++) {
@@ -648,8 +648,8 @@ LayoutBuilder.prototype.processRow = function(
 			var endingRow = tableRow + column.rowSpan - 1;
 			if (endingRow >= tableBody.length) {
 				throw "Row span for column " +
-					columnIndex +
-					" (with indexes starting from 0) exceeded row count";
+				columnIndex +
+				" (with indexes starting from 0) exceeded row count";
 			}
 			return tableBody[endingRow][columnIndex];
 		}
@@ -659,7 +659,7 @@ LayoutBuilder.prototype.processRow = function(
 };
 
 // lists
-LayoutBuilder.prototype.processList = function(orderedList, node) {
+LayoutBuilder.prototype.processList = async function (orderedList, node) {
 	var self = this,
 		items = orderedList ? node.ol : node.ul,
 		gapSize = node._gapSize;
@@ -667,17 +667,17 @@ LayoutBuilder.prototype.processList = function(orderedList, node) {
 	this.writer.context().addMargin(gapSize.width);
 
 	var nextMarker;
-	this.tracker.auto("lineAdded", addMarkerToFirstLeaf, function() {
-		items.forEach(function(item) {
+	await this.tracker.auto("lineAdded", addMarkerToFirstLeaf, async function () {
+		for (let item of items) {
 			nextMarker = item.listMarker;
-			self.processNode(item);
+			await self.processNode(item);
 			addAll(node.positions, item.positions);
-		});
+		}
 	});
 
 	this.writer.context().addMargin(-gapSize.width);
 
-	function addMarkerToFirstLeaf(line) {
+	async function addMarkerToFirstLeaf(line) {
 		// I'm not very happy with the way list processing is implemented
 		// (both code and algorithm should be rethinked)
 		if (nextMarker) {
@@ -695,53 +695,135 @@ LayoutBuilder.prototype.processList = function(orderedList, node) {
 				markerLine.x = -marker._minWidth;
 				markerLine.y =
 					line.getAscenderHeight() - markerLine.getAscenderHeight();
-				self.writer.addLine(markerLine, true);
+				await self.writer.addLine(markerLine, true);
 			}
 		}
 	}
 };
 
 // tables
-LayoutBuilder.prototype.processTable = function(tableNode) {
+LayoutBuilder.prototype.processTable = async function (tableNode) {
 	var processor = new TableProcessor(tableNode);
 
 	processor.beginTable(this.writer);
 
 	var rowHeights = tableNode.table.heights;
 	for (var i = 0, l = tableNode.table.body.length; i < l; i++) {
-		processor.beginRow(i, this.writer);
-
-		var height;
-		if (isFunction(rowHeights)) {
-			height = rowHeights(i);
-		} else if (isArray(rowHeights)) {
-			height = rowHeights[i];
-		} else {
-			height = rowHeights;
-		}
-
-		if (height === "auto") {
-			height = undefined;
-		}
-
-		var result = this.processRow(
-			tableNode.table.body[i],
-			tableNode.table.widths,
-			tableNode._offsets.offsets,
-			tableNode.table.body,
+		await this.processTableRow(
+			processor,
+			tableNode,
+			rowHeights,
 			i,
-			height
+			tableNode.table.body[i]
 		);
-		addAll(tableNode.positions, result.positions);
+	}
 
-		processor.endRow(i, this.writer, result.pageBreaks);
+	// Add data rows
+	if (tableNode.data) {
+		await this.fillTableData(processor, tableNode, rowHeights);
 	}
 
 	processor.endTable(this.writer);
 };
 
+LayoutBuilder.prototype.fillTableData = function (processor, node, rowHeights) {
+	var self = this;
+
+	return new Promise((resolve, reject) => {
+		var connection = mysql.createConnection(node.data.connection);
+		var columns = node.data.columns;
+		var layoutBuilder = this;
+		var idx = node.table.body.length;
+
+		connection.connect(err => {
+			if (err) {
+				reject(err);
+			} else {
+				connection
+					.query(node.data.query)
+					.stream()
+					.pipe(
+						stream.Transform({
+							objectMode: true,
+							transform: async function (data, encoding, callback) {
+								var row = [];
+								for (var i = 0; i < columns.length; i++) {
+									var column = columns[i];
+
+									if (column.hasOwnProperty("text")) {
+										var newColumn = JSON.parse(JSON.stringify(column));
+										newColumn.text = data[newColumn.text];
+									} else {
+										newColumn = {
+											text: data[column]
+										};
+									}
+
+									newColumn = await self.docPreprocessor.preprocessNode(
+										newColumn
+									);
+									row.push(self.docMeasure.measureLeaf(newColumn));
+								}
+
+								node.table.body[idx] = row;
+								await self.processTableRow(
+									processor,
+									node,
+									rowHeights,
+									idx,
+									row
+								);
+
+								callback();
+							}
+						})
+					)
+					.on("finish", () => {
+						delete node.data;
+						resolve();
+					});
+			}
+		});
+	});
+};
+
+LayoutBuilder.prototype.processTableRow = async function (
+	processor,
+	tableNode,
+	rowHeights,
+	i,
+	row
+) {
+	processor.beginRow(i, this.writer);
+
+	var height;
+	if (isFunction(rowHeights)) {
+		height = rowHeights(i);
+	} else if (isArray(rowHeights)) {
+		height = rowHeights[i];
+	} else {
+		height = rowHeights;
+	}
+
+	if (height === "auto") {
+		height = undefined;
+	}
+
+	var result = await this.processRow(
+		row,
+		tableNode.table.widths,
+		tableNode._offsets.offsets,
+		tableNode.table.body,
+		i,
+		height
+	);
+	addAll(tableNode.positions, result.positions);
+
+	await processor.endRow(i, this.writer, result.pageBreaks);
+};
+
 // leafs (texts)
-LayoutBuilder.prototype.processLeaf = function(node) {
+LayoutBuilder.prototype.processLeaf = async function (node) {
 	var line = this.buildNextLine(node);
 	var currentHeight = line ? line.getHeight() : 0;
 	var maxHeight = node.maxHeight || -1;
@@ -755,7 +837,7 @@ LayoutBuilder.prototype.processLeaf = function(node) {
 	}
 
 	while (line && (maxHeight === -1 || currentHeight < maxHeight)) {
-		var positions = this.writer.addLine(line);
+		var positions = await this.writer.addLine(line);
 		node.positions.push(positions);
 		line = this.buildNextLine(node);
 		if (line) {
@@ -764,14 +846,14 @@ LayoutBuilder.prototype.processLeaf = function(node) {
 	}
 };
 
-LayoutBuilder.prototype.processToc = function(node) {
+LayoutBuilder.prototype.processToc = async function (node) {
 	if (node.toc.title) {
-		this.processNode(node.toc.title);
+		await this.processNode(node.toc.title);
 	}
-	this.processNode(node.toc._table);
+	await this.processNode(node.toc._table);
 };
 
-LayoutBuilder.prototype.buildNextLine = function(textNode) {
+LayoutBuilder.prototype.buildNextLine = function (textNode) {
 	function cloneInline(inline) {
 		var newInline = inline.constructor();
 		for (var key in inline) {
@@ -838,12 +920,12 @@ LayoutBuilder.prototype.buildNextLine = function(textNode) {
 };
 
 // images
-LayoutBuilder.prototype.processImage = function(node) {
-	var position = this.writer.addImage(node);
+LayoutBuilder.prototype.processImage = async function (node) {
+	var position = await this.writer.addImage(node);
 	node.positions.push(position);
 };
 
-LayoutBuilder.prototype.processCanvas = function(node) {
+LayoutBuilder.prototype.processCanvas = async function (node) {
 	var height = node._minHeight;
 
 	if (
@@ -853,12 +935,12 @@ LayoutBuilder.prototype.processCanvas = function(node) {
 		// TODO: support for canvas larger than a page
 		// TODO: support for other overflow methods
 
-		this.writer.moveToNextPage();
+		await this.writer.moveToNextPage();
 	}
 
 	this.writer.alignCanvas(node);
 
-	node.canvas.forEach(function(vector) {
+	node.canvas.forEach(function (vector) {
 		var position = this.writer.addVector(vector);
 		node.positions.push(position);
 	}, this);
@@ -866,8 +948,8 @@ LayoutBuilder.prototype.processCanvas = function(node) {
 	this.writer.context().moveDown(height);
 };
 
-LayoutBuilder.prototype.processQr = function(node) {
-	var position = this.writer.addQr(node);
+LayoutBuilder.prototype.processQr = async function (node) {
+	var position = await this.writer.addQr(node);
 	node.positions.push(position);
 };
 

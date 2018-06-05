@@ -1,7 +1,7 @@
-'use strict';
+"use strict";
 
-var TraversalTracker = require('./traversalTracker');
-var isString = require('./helpers').isString;
+var TraversalTracker = require("./traversalTracker");
+var isString = require("./helpers").isString;
 
 /**
  * Creates an instance of DocumentContext - a store for current x, y positions and available width/height.
@@ -28,7 +28,7 @@ function DocumentContext(pageSize, pageMargins) {
 	this.hasBackground = false;
 }
 
-DocumentContext.prototype.beginColumnGroup = function () {
+DocumentContext.prototype.beginColumnGroup = function() {
 	this.snapshots.push({
 		x: this.x,
 		y: this.y,
@@ -49,7 +49,7 @@ DocumentContext.prototype.beginColumnGroup = function () {
 	this.lastColumnWidth = 0;
 };
 
-DocumentContext.prototype.beginColumn = function (width, offset, endingCell) {
+DocumentContext.prototype.beginColumn = function(width, offset, endingCell) {
 	var saved = this.snapshots[this.snapshots.length - 1];
 
 	this.calculateBottomMost(saved);
@@ -58,13 +58,13 @@ DocumentContext.prototype.beginColumn = function (width, offset, endingCell) {
 	this.page = saved.page;
 	this.x = this.x + this.lastColumnWidth + (offset || 0);
 	this.y = saved.y;
-	this.availableWidth = width;	//saved.availableWidth - offset;
+	this.availableWidth = width; //saved.availableWidth - offset;
 	this.availableHeight = saved.availableHeight;
 
 	this.lastColumnWidth = width;
 };
 
-DocumentContext.prototype.calculateBottomMost = function (destContext) {
+DocumentContext.prototype.calculateBottomMost = function(destContext) {
 	if (this.endingCell) {
 		this.saveContextInEndingCell(this.endingCell);
 		this.endingCell = null;
@@ -73,7 +73,7 @@ DocumentContext.prototype.calculateBottomMost = function (destContext) {
 	}
 };
 
-DocumentContext.prototype.markEnding = function (endingCell) {
+DocumentContext.prototype.markEnding = function(endingCell) {
 	this.page = endingCell._columnEndingContext.page;
 	this.x = endingCell._columnEndingContext.x;
 	this.y = endingCell._columnEndingContext.y;
@@ -82,7 +82,7 @@ DocumentContext.prototype.markEnding = function (endingCell) {
 	this.lastColumnWidth = endingCell._columnEndingContext.lastColumnWidth;
 };
 
-DocumentContext.prototype.saveContextInEndingCell = function (endingCell) {
+DocumentContext.prototype.saveContextInEndingCell = function(endingCell) {
 	endingCell._columnEndingContext = {
 		page: this.page,
 		x: this.x,
@@ -93,7 +93,7 @@ DocumentContext.prototype.saveContextInEndingCell = function (endingCell) {
 	};
 };
 
-DocumentContext.prototype.completeColumnGroup = function (height) {
+DocumentContext.prototype.completeColumnGroup = function(height) {
 	var saved = this.snapshots.pop();
 
 	this.calculateBottomMost(saved);
@@ -104,7 +104,7 @@ DocumentContext.prototype.completeColumnGroup = function (height) {
 	var y = saved.bottomMost.y;
 	if (height) {
 		if (saved.page === saved.bottomMost.page) {
-			if ((saved.y + height) > y) {
+			if (saved.y + height > y) {
 				y = saved.y + height;
 			}
 		} else {
@@ -117,30 +117,36 @@ DocumentContext.prototype.completeColumnGroup = function (height) {
 	this.availableWidth = saved.availableWidth;
 	this.availableHeight = saved.bottomMost.availableHeight;
 	if (height) {
-		this.availableHeight -= (y - saved.bottomMost.y);
+		this.availableHeight -= y - saved.bottomMost.y;
 	}
 	this.lastColumnWidth = saved.lastColumnWidth;
 };
 
-DocumentContext.prototype.addMargin = function (left, right) {
+DocumentContext.prototype.addMargin = function(left, right) {
 	this.x += left;
 	this.availableWidth -= left + (right || 0);
 };
 
-DocumentContext.prototype.moveDown = function (offset) {
+DocumentContext.prototype.moveDown = function(offset) {
 	this.y += offset;
 	this.availableHeight -= offset;
 
 	return this.availableHeight > 0;
 };
 
-DocumentContext.prototype.initializePage = function () {
+DocumentContext.prototype.initializePage = function() {
 	this.y = this.pageMargins.top;
-	this.availableHeight = this.getCurrentPage().pageSize.height - this.pageMargins.top - this.pageMargins.bottom;
-	this.pageSnapshot().availableWidth = this.getCurrentPage().pageSize.width - this.pageMargins.left - this.pageMargins.right;
+	this.availableHeight =
+		this.getCurrentPage().pageSize.height -
+		this.pageMargins.top -
+		this.pageMargins.bottom;
+	this.pageSnapshot().availableWidth =
+		this.getCurrentPage().pageSize.width -
+		this.pageMargins.left -
+		this.pageMargins.right;
 };
 
-DocumentContext.prototype.pageSnapshot = function () {
+DocumentContext.prototype.pageSnapshot = function() {
 	if (this.snapshots[0]) {
 		return this.snapshots[0];
 	} else {
@@ -148,18 +154,20 @@ DocumentContext.prototype.pageSnapshot = function () {
 	}
 };
 
-DocumentContext.prototype.moveTo = function (x, y) {
+DocumentContext.prototype.moveTo = function(x, y) {
 	if (x !== undefined && x !== null) {
 		this.x = x;
-		this.availableWidth = this.getCurrentPage().pageSize.width - this.x - this.pageMargins.right;
+		this.availableWidth =
+			this.getCurrentPage().pageSize.width - this.x - this.pageMargins.right;
 	}
 	if (y !== undefined && y !== null) {
 		this.y = y;
-		this.availableHeight = this.getCurrentPage().pageSize.height - this.y - this.pageMargins.bottom;
+		this.availableHeight =
+			this.getCurrentPage().pageSize.height - this.y - this.pageMargins.bottom;
 	}
 };
 
-DocumentContext.prototype.beginDetachedBlock = function () {
+DocumentContext.prototype.beginDetachedBlock = function() {
 	this.snapshots.push({
 		x: this.x,
 		y: this.y,
@@ -171,7 +179,7 @@ DocumentContext.prototype.beginDetachedBlock = function () {
 	});
 };
 
-DocumentContext.prototype.endDetachedBlock = function () {
+DocumentContext.prototype.endDetachedBlock = function() {
 	var saved = this.snapshots.pop();
 
 	this.x = saved.x;
@@ -186,16 +194,21 @@ DocumentContext.prototype.endDetachedBlock = function () {
 function pageOrientation(pageOrientationString, currentPageOrientation) {
 	if (pageOrientationString === undefined) {
 		return currentPageOrientation;
-	} else if (isString(pageOrientationString) && (pageOrientationString.toLowerCase() === 'landscape')) {
-		return 'landscape';
+	} else if (
+		isString(pageOrientationString) &&
+		pageOrientationString.toLowerCase() === "landscape"
+	) {
+		return "landscape";
 	} else {
-		return 'portrait';
+		return "portrait";
 	}
 }
 
-var getPageSize = function (currentPage, newPageOrientation) {
-
-	newPageOrientation = pageOrientation(newPageOrientation, currentPage.pageSize.orientation);
+var getPageSize = function(currentPage, newPageOrientation) {
+	newPageOrientation = pageOrientation(
+		newPageOrientation,
+		currentPage.pageSize.orientation
+	);
 
 	if (newPageOrientation !== currentPage.pageSize.orientation) {
 		return {
@@ -210,11 +223,9 @@ var getPageSize = function (currentPage, newPageOrientation) {
 			height: currentPage.pageSize.height
 		};
 	}
-
 };
 
-
-DocumentContext.prototype.moveToNextPage = function (pageOrientation) {
+DocumentContext.prototype.moveToNextPage = async function(pageOrientation) {
 	var nextPageIndex = this.page + 1;
 
 	var prevPage = this.page;
@@ -226,7 +237,7 @@ DocumentContext.prototype.moveToNextPage = function (pageOrientation) {
 		var currentPageOrientation = this.getCurrentPage().pageSize.orientation;
 
 		var pageSize = getPageSize(this.getCurrentPage(), pageOrientation);
-		this.addPage(pageSize);
+		await this.addPage(pageSize);
 
 		if (currentPageOrientation === pageSize.orientation) {
 			this.availableWidth = currentAvailableWidth;
@@ -244,19 +255,18 @@ DocumentContext.prototype.moveToNextPage = function (pageOrientation) {
 	};
 };
 
-
-DocumentContext.prototype.addPage = function (pageSize) {
-	var page = {items: [], pageSize: pageSize};
+DocumentContext.prototype.addPage = async function(pageSize) {
+	var page = { items: [], pageSize: pageSize };
 	this.pages.push(page);
 	this.page = this.pages.length - 1;
 	this.initializePage();
 
-	this.tracker.emit('pageAdded');
+	await this.tracker.emit("pageAdded");
 
 	return page;
 };
 
-DocumentContext.prototype.getCurrentPage = function () {
+DocumentContext.prototype.getCurrentPage = function() {
 	if (this.page < 0 || this.page >= this.pages.length) {
 		return null;
 	}
@@ -264,10 +274,12 @@ DocumentContext.prototype.getCurrentPage = function () {
 	return this.pages[this.page];
 };
 
-DocumentContext.prototype.getCurrentPosition = function () {
+DocumentContext.prototype.getCurrentPosition = function() {
 	var pageSize = this.getCurrentPage().pageSize;
-	var innerHeight = pageSize.height - this.pageMargins.top - this.pageMargins.bottom;
-	var innerWidth = pageSize.width - this.pageMargins.left - this.pageMargins.right;
+	var innerHeight =
+		pageSize.height - this.pageMargins.top - this.pageMargins.bottom;
+	var innerWidth =
+		pageSize.width - this.pageMargins.left - this.pageMargins.right;
 
 	return {
 		pageNumber: this.page + 1,
@@ -276,8 +288,8 @@ DocumentContext.prototype.getCurrentPosition = function () {
 		pageInnerWidth: innerWidth,
 		left: this.x,
 		top: this.y,
-		verticalRatio: ((this.y - this.pageMargins.top) / innerHeight),
-		horizontalRatio: ((this.x - this.pageMargins.left) / innerWidth)
+		verticalRatio: (this.y - this.pageMargins.top) / innerHeight,
+		horizontalRatio: (this.x - this.pageMargins.left) / innerWidth
 	};
 };
 
@@ -289,7 +301,7 @@ function bottomMostContext(c1, c2) {
 	} else if (c2.page > c1.page) {
 		r = c2;
 	} else {
-		r = (c1.y > c2.y) ? c1 : c2;
+		r = c1.y > c2.y ? c1 : c2;
 	}
 
 	return {

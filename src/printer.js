@@ -83,7 +83,8 @@ function PdfPrinter(fontDescriptors) {
  */
 PdfPrinter.prototype.createPdfKitDocument = async function (
 	docDefinition,
-	options
+	options,
+	destination
 ) {
 	options = options || {};
 
@@ -102,6 +103,8 @@ PdfPrinter.prototype.createPdfKitDocument = async function (
 		autoFirstPage: false,
 		compress: compressPdf
 	});
+	this.outStream = this.pdfKitDoc.pipe(destination);
+
 	setMetadata(docDefinition, this.pdfKitDoc);
 
 	this.fontProvider = new FontProvider(this.fontDescriptors, this.pdfKitDoc);
