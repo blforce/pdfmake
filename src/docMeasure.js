@@ -44,7 +44,7 @@ DocMeasure.prototype.measureNode = function (node) {
 
 		if (node.columns) {
 			return extendMargins(self.measureColumns(node));
-		} else if (node.wrapper) {
+		} else if (node.columnCount) {
 			return extendMargins(self.measureWrapper(node));
 		} else if (node.stack) {
 			return extendMargins(self.measureVerticalContainer(node));
@@ -502,8 +502,8 @@ DocMeasure.prototype.measureOrderedList = function (node) {
 };
 
 DocMeasure.prototype.measureWrapper = function (node) {
-	var items = node.wrapper.content;
-	node._gap = node.wrapper.columnGap || 6;
+	var items = node.content;
+	node._gap = this.styleStack.getProperty('columnGap') || 20;
 
 	node._minWidth = 0;
 	node._maxWidth = 0;

@@ -258,10 +258,13 @@ DocumentContext.prototype.moveToNextColumn = function () {
 	if (this.firstColumnHeight > 0) {
 		this.y = this.firstColumnY;
 		this.availableHeight = this.firstColumnHeight;
-		this.firstColumnHeight = this.firstColumnY = 0;
+
+		if (this.currentColumn == this.columns - 1) {
+			this.firstColumnHeight = this.firstColumnY = 0;
+		}
 	}
 
-	this.x += (this.availableWidth + this.columnGap) * this.currentColumn;
+	this.x += this.availableWidth + this.columnGap;
 
 	return {
 		y: this.y,

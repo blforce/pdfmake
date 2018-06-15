@@ -68,7 +68,7 @@ LayoutBuilder.prototype.layoutDocument = function (docStructure, fontProvider, s
 			var nodeInfo = {};
 			[
 				'id', 'text', 'ul', 'ol', 'table', 'image', 'qr', 'canvas', 'columns',
-				'headlineLevel', 'style', 'pageBreak', 'pageOrientation', 'wrapper',
+				'headlineLevel', 'style', 'pageBreak', 'pageOrientation',
 				'width', 'height'
 			].forEach(function (key) {
 				if (node[key] !== undefined) {
@@ -362,7 +362,7 @@ LayoutBuilder.prototype.processNode = function (node) {
 
 		if (node.stack) {
 			self.processVerticalContainer(node);
-		} else if (node.wrapper) {
+		} else if (node.columnCount) {
 			self.processWrapper(node);
 		} else if (node.columns) {
 			self.processColumns(node);
@@ -422,9 +422,8 @@ LayoutBuilder.prototype.processNode = function (node) {
 
 LayoutBuilder.prototype.processWrapper = function (node) {
 	var self = this;
-	var availableWidth = this.writer.context().availableWidth;
-	var columns = node.wrapper.columns;
-	var content = node.wrapper.content;
+	var columns = node.columnCount;
+	var content = node.content;
 
 	var pageBreaks = [],
 		positions = [];
