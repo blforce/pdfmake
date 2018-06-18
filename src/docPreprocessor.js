@@ -33,6 +33,10 @@ DocPreprocessor.prototype.preprocessNode = function (node) {
 		node.text = '';
 	}
 
+	if (node.outline !== undefined) {
+		this.preprocessOutline(node);
+	}
+
 	if (node.columns) {
 		return this.preprocessColumns(node);
 	} else if (node.columnCount) {
@@ -60,6 +64,22 @@ DocPreprocessor.prototype.preprocessNode = function (node) {
 	} else {
 		throw 'Unrecognized document structure: ' + JSON.stringify(node, fontStringify);
 	}
+};
+
+DocPreprocessor.prototype.preprocessOutline = function (node) {
+	var outline = node.outline;
+
+	if (isNumber(outline)) {
+		outline = {
+			level: outline
+		};
+	}
+
+	if (node.text && outline.text === undefined) {
+		outline.text = node.text;
+	}
+
+	node._outline = outline;
 };
 
 DocPreprocessor.prototype.preprocessWrapper = function (node) {

@@ -639,6 +639,16 @@ var docDefinition = {
 }
 ```
 
+#### Outlines
+
+To add outline entries for the document, add an `outline` property that is 
+either an integer representing the outline level, or contains the `text` and `level` attributes.
+
+```js
+{text: 'Header', outline: 0}
+{table: {...}, outline: {level: 1, text: "Content Table"}}
+```
+
 
 #### Page dimensions, orientation and margins
 
