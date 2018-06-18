@@ -360,6 +360,10 @@ LayoutBuilder.prototype.processNode = function (node) {
 			self.writer.context().moveTo((relPosition.x || 0) + self.writer.context().x, (relPosition.y || 0) + self.writer.context().y);
 		}
 
+		if (node._outline) {
+			self.writer.writer.addOutlineItem(node._outline);
+		}
+
 		if (node.stack) {
 			self.processVerticalContainer(node);
 		} else if (node.columnCount) {
