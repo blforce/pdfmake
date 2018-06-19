@@ -225,14 +225,23 @@ DocMeasure.prototype.measureToc = function (node) {
 	var textStyle = node.toc.textStyle || {};
 	var numberStyle = node.toc.numberStyle || textStyle;
 	var textMargin = node.toc.textMargin || [0, 0, 0, 0];
+
 	for (var i = 0, l = node.toc._items.length; i < l; i++) {
 		var item = node.toc._items[i];
-		var lineStyle = node.toc._items[i].tocStyle || textStyle;
-		var lineMargin = node.toc._items[i].tocMargin || textMargin;
-		body.push([
-			{text: item.text, alignment: 'left', style: lineStyle, margin: lineMargin},
-			{text: '00000', alignment: 'right', _tocItemRef: item, style: numberStyle, margin: [0, lineMargin[1], 0, lineMargin[3]]}
-		]);
+		var lineStyle = item.tocStyle || textStyle;
+		var lineMargin = item.tocMargin || textMargin;
+
+		if (item.isHeader) {
+			body.push([
+				{text: item.text, colSpan: 2, fontSize: 16, bold: true, alignment: 'left', margin: lineMargin, _outline: {level: 1, text: item.text}}
+			]);
+		}
+		else {
+			body.push([
+				{text: item.text, alignment: 'left', style: lineStyle, margin: lineMargin},
+				{text: '00000', alignment: 'right', _tocItemRef: item, style: numberStyle, margin: [0, lineMargin[1], 0, lineMargin[3]]}
+			]);
+		}
 	}
 
 
@@ -535,6 +544,16 @@ DocMeasure.prototype.measureColumns = function (node) {
 	return node;
 };
 
+function getColumnCount(row) {
+	var total = 0;
+
+	for (var i = 0, l = row.length; i < l; i++) {
+		total += row[i].colSpan || 1;
+	}
+
+	return total;
+}
+
 DocMeasure.prototype.measureTable = function (node) {
 	extendTableWidths(node);
 	node._layout = getLayout(this.tableLayouts);
@@ -543,13 +562,18 @@ DocMeasure.prototype.measureTable = function (node) {
 	var colSpans = [];
 	var col, row, cols, rows;
 
-	for (col = 0, cols = node.table.body[0].length; col < cols; col++) {
+	for (col = 0, cols = getColumnCount(node.table.body[0]); col < cols; col++) {
 		var c = node.table.widths[col];
 		c._minWidth = 0;
 		c._maxWidth = 0;
 
 		for (row = 0, rows = node.table.body.length; row < rows; row++) {
 			var rowData = node.table.body[row];
+
+			if (col >= rowData.length) {
+				continue;
+			}
+
 			var data = rowData[col];
 			if (data === undefined) {
 				console.error('Malformed table row ', rowData, 'in node ', node);
