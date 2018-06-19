@@ -84,8 +84,6 @@ function PdfPrinter(fontDescriptors) {
 PdfPrinter.prototype.createPdfKitDocument = function (docDefinition, options) {
 	options = options || {};
 
-	this.currentOutlineLevel = 0
-
 	var pageSize = fixPageSize(docDefinition.pageSize, docDefinition.pageOrientation);
 	var compressPdf = isBoolean(docDefinition.compress) ? docDefinition.compress : true;
 	var bufferPages = options.bufferPages || false;
@@ -337,9 +335,6 @@ function renderPages(pages, fontProvider, pdfKitDoc, progressCallback) {
 				case 'image':
 					renderImage(item.item, item.item.x, item.item.y, pdfKitDoc);
 					break;
-				case 'outlineItem':
-					addOutlineItem.call(this, item.item.level, item.item.text, pdfKitDoc)
-					break;
 				case 'beginClip':
 					beginClip(item.item, pdfKitDoc);
 					break;
@@ -357,16 +352,16 @@ function renderPages(pages, fontProvider, pdfKitDoc, progressCallback) {
 }
 
 function addOutlineItem(level, text, pdfKitDoc) {
-	while (level < this.currentOutlineLevel) {
+
+	while (level < pdfKitDoc.getOutlineLevel()) {
 		pdfKitDoc.endOutlineSublevel();
-		this.currentOutlineLevel--;
 	}
 
-	if (level === this.currentOutlineLevel) {
+	var currentLevel = pdfKitDoc.getOutlineLevel();
+	if (level === currentLevel) {
 		pdfKitDoc.addOutline(text);
 	} else {
 		pdfKitDoc.addSublevelOutline(text);
-		this.currentOutlineLevel++;
 	}
 }
 
@@ -391,6 +386,10 @@ function renderLine(line, x, y, pdfKitDoc) {
 				line.inlines[0].x += diffWidth / 2;
 				break;
 		}
+	}
+
+	if (line._outline) {
+		addOutlineItem(line._outline.level, line._outline.text, pdfKitDoc);
 	}
 
 	x = x || 0;

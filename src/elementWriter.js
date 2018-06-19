@@ -24,14 +24,6 @@ function addPageItem(page, item, index) {
 	}
 }
 
-ElementWriter.prototype.addOutlineItem = function (item) {
-	var page = this.context.getCurrentPage();
-
-	addPageItem(page, {
-		type: 'outlineItem',
-		item
-	}, undefined);
-};
 
 ElementWriter.prototype.addLine = function (line, dontUpdateContextPosition, index) {
 	var height = line.getHeight();

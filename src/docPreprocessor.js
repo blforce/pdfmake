@@ -201,6 +201,64 @@ DocPreprocessor.prototype.preprocessText = function (node) {
 	return node;
 };
 
+function compareItem(a, b) {
+	if (a.text < b.text) {
+		return -1;
+	}
+
+	if (a.text > b.text) {
+		return 1;
+	}
+
+	return 0;
+}
+
+function insertHeaders(items) {
+	// Add number header if needed
+	var firstChar = items[0].text.substring(0, 1);
+	var lastSection;
+
+	if (!isNaN(firstChar)) {
+		items.unshift({
+			text: '0-9',
+			isHeader: true
+		});
+		lastSection = 'numeric';
+	}
+
+	var idx = 0;
+
+	while (idx < items.length) {
+		firstChar = items[idx].text.substring(0, 1);
+
+		if (lastSection === 'numeric' && !isNaN(firstChar)) {
+			idx++;
+			continue;
+		}
+
+		if (firstChar !== lastSection) {
+			if (idx > 0) {
+				var previousItem = items[idx - 1];
+				var prevMargin = previousItem.tocMargin;
+
+				if (prevMargin) {
+					prevMargin[3] = 16;
+				} else {
+					previousItem.tocMargin = [0, 0, 0, 16]
+				}
+			}
+			lastSection = firstChar;
+			items.splice(idx, 0, {
+				text: firstChar.toUpperCase(),
+				isHeader: true
+			});
+			idx++;
+		}
+
+		idx++;
+	}
+};
+
 DocPreprocessor.prototype.preprocessToc = function (node) {
 	if (!node.toc.id) {
 		node.toc.id = '_default_';
@@ -215,6 +273,14 @@ DocPreprocessor.prototype.preprocessToc = function (node) {
 		}
 
 		node.toc._items = this.tocs[node.toc.id].toc._items;
+
+		node.toc._items.sort(compareItem);
+
+		// TODO: Combine similar items
+
+		if (node.toc.showSectionHeaders) {
+			insertHeaders(node.toc._items);
+		}
 	}
 
 	this.tocs[node.toc.id] = node;

@@ -360,10 +360,6 @@ LayoutBuilder.prototype.processNode = function (node) {
 			self.writer.context().moveTo((relPosition.x || 0) + self.writer.context().x, (relPosition.y || 0) + self.writer.context().y);
 		}
 
-		if (node._outline) {
-			self.writer.writer.addOutlineItem(node._outline);
-		}
-
 		if (node.stack) {
 			self.processVerticalContainer(node);
 		} else if (node.columnCount) {
@@ -605,6 +601,11 @@ LayoutBuilder.prototype.processList = function (orderedList, node) {
 LayoutBuilder.prototype.processTable = function (tableNode) {
 	var processor = new TableProcessor(tableNode);
 
+	if (tableNode._outline) {
+		tableNode.table.body[tableNode.table.headerRows][0]._outline = tableNode._outline;
+		delete tableNode._outline;
+	}
+
 	processor.beginTable(this.writer);
 
 	var rowHeights = tableNode.table.heights;
@@ -680,6 +681,11 @@ LayoutBuilder.prototype.buildNextLine = function (textNode) {
 
 	var line = new Line(this.writer.context().availableWidth);
 	var textTools = new TextTools(null);
+
+	if (textNode._outline) {
+		line._outline = textNode._outline;
+		delete textNode._outline;
+	}
 
 	while (textNode._inlines && textNode._inlines.length > 0 && line.hasEnoughSpaceForInline(textNode._inlines[0])) {
 		var inline = textNode._inlines.shift();
