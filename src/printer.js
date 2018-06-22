@@ -356,17 +356,26 @@ function renderPages(pages, fontProvider, pdfKitDoc, progressCallback) {
 	}
 }
 
+let outlineLevels = [];
+let currentLevel = undefined;
+let lastAdded;
+
 function addOutlineItem(level, text, pdfKitDoc) {
-	while (level < this.currentOutlineLevel) {
-		pdfKitDoc.endOutlineSublevel();
-		this.currentOutlineLevel--;
+
+	if (currentLevel === undefined) {
+		currentLevel = pdfKitDoc.outline;
 	}
 
-	if (level === this.currentOutlineLevel) {
-		pdfKitDoc.addOutline(text);
+	while (level < outlineLevels.length) {
+		currentLevel = outlineLevels.pop();
+	}
+
+	if (level === outlineLevels.length) {
+		lastAdded = currentLevel.addItem(text)
 	} else {
-		pdfKitDoc.addSublevelOutline(text);
-		this.currentOutlineLevel++;
+		outlineLevels.push(currentLevel);
+		currentLevel = lastAdded;
+		lastAdded = currentLevel.addItem(text);
 	}
 }
 
